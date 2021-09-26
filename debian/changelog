@@ -1,0 +1,5 @@
+k9s (0.24.15-1kaisen) kaisen-packages; urgency=medium
+
+  * First packaging for Kaisen Linux
+
+ -- Kevin Chevreuil - Kaisen <kaisen@kaisenlinux.org>  Fri, 24 Sep 2021 18:45:05 +0200

@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+
+export GOLANG=$(CURDIR)/obj-x86_64-linux-gnu
+
+%:
+	dh $@ --buildsystem=golang
+
+override_dh_auto_build:
+	go get
+	go build
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	dh_auto_install -- --no-source

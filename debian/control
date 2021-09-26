@@ -1,0 +1,19 @@
+Source: k9s
+Section: admin
+Priority: optional
+Maintainer: Kevin Chevreuil - Kaisen <kaisen@kaisenlinux.org>
+Build-Depends: debhelper-compat (= 13),
+	       golang-go (>= 1.16),
+	       dh-golang,
+Standards-Version: 4.6.0
+Homepage: https://k9scli.io/
+Vcs-Browser: https://gitlab.com/kaisenlinux/packages/k9s
+Vcs-Git: https://gitlab.com/kaisenlinux/packages/k9s.git
+XS-Go-Import-Path: github.com/derailed/k9s
+
+Package: k9s
+Architecture: amd64 arm64
+Depends: ${shlibs:Depends},
+	 ${misc:Depends},
+Suggests: kubernetes-client
+Description: Kubernetes CLI To Manage Your Clusters In Style!
