@@ -80,6 +80,7 @@ func (v *LiveView) Init(_ context.Context) error {
 	return nil
 }
 
+// InCmdMode checks if prompt is active.
 func (v *LiveView) InCmdMode() bool {
 	return v.cmdBuff.InCmdMode()
 }
@@ -118,11 +119,11 @@ func (v *LiveView) ResourceChanged(lines []string, matches fuzzy.Matches) {
 }
 
 // BufferChanged indicates the buffer was changed.
-func (v *LiveView) BufferChanged(s string) {}
+func (v *LiveView) BufferChanged(_, _ string) {}
 
 // BufferCompleted indicates input was accepted.
-func (v *LiveView) BufferCompleted(s string) {
-	v.model.Filter(s)
+func (v *LiveView) BufferCompleted(text, _ string) {
+	v.model.Filter(text)
 }
 
 // BufferActive indicates the buff activity changed.

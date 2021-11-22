@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/derailed/k9s/internal"
 	"github.com/derailed/k9s/internal/client"
 	"github.com/derailed/k9s/internal/dao"
+	"github.com/derailed/k9s/internal/port"
 	"github.com/derailed/k9s/internal/render"
 	"github.com/derailed/k9s/internal/ui"
 	"github.com/gdamore/tcell/v2"
@@ -178,68 +178,65 @@ func (c *Container) portFwdCmd(evt *tcell.EventKey) *tcell.EventKey {
 		return nil
 	}
 
-	ports, ok := c.isForwardable(path)
+	ports, ann, ok := c.listForwardable(path)
 	if !ok {
 		return nil
 	}
-	ShowPortForwards(c, c.GetTable().Path, ports, startFwdCB)
+	ShowPortForwards(c, c.GetTable().Path, ports, ann, startFwdCB)
 
 	return nil
 }
 
-func (c *Container) isForwardable(path string) ([]string, bool) {
-	po, err := fetchPod(c.App().factory, c.GetTable().Path)
-	if err != nil {
-		return nil, false
-	}
-
-	cc := po.Spec.Containers
-	var co *v1.Container
-	for i := range cc {
-		if cc[i].Name == path {
-			co = &cc[i]
-		}
-	}
-	if co == nil {
-		log.Error().Err(fmt.Errorf("unable to locate container named %q", path))
-		return nil, false
-	}
-
+func checkRunningStatus(co string, ss []v1.ContainerStatus) error {
 	var cs *v1.ContainerStatus
-	ss := po.Status.ContainerStatuses
 	for i := range ss {
-		if ss[i].Name == path {
+		if ss[i].Name == co {
 			cs = &ss[i]
+			break
 		}
 	}
 	if cs == nil {
-		log.Error().Err(fmt.Errorf("unable to locate container status for %q", path))
-		return nil, false
+		return fmt.Errorf("unable to locate container status for %q", co)
 	}
 
 	if render.ToContainerState(cs.State) != "Running" {
-		c.App().Flash().Err(fmt.Errorf("Container %s is not running?", path))
-		return nil, false
+		return fmt.Errorf("Container %s is not running?", co)
 	}
 
-	portC := render.ToContainerPorts(co.Ports)
-	ports := strings.Split(portC, ",")
-	if len(ports) == 0 {
-		c.App().Flash().Err(errors.New("Container exposes no ports"))
-		return nil, false
-	}
+	return nil
+}
 
-	pp := make([]string, 0, len(ports))
-	for _, p := range ports {
-		if !isTCPPort(p) {
-			continue
+func locateContainer(co string, cc []v1.Container) (*v1.Container, error) {
+	for i := range cc {
+		if cc[i].Name == co {
+			return &cc[i], nil
 		}
-		pp = append(pp, path+"/"+p)
 	}
-	if len(pp) == 0 {
-		c.App().Flash().Err(errors.New("No TCP port available on container"))
-		return nil, false
+	return nil, fmt.Errorf("unable to locate container named %q", co)
+}
+
+func (c *Container) listForwardable(path string) (port.ContainerPortSpecs, map[string]string, bool) {
+	po, err := fetchPod(c.App().factory, c.GetTable().Path)
+	if err != nil {
+		return nil, nil, false
 	}
 
-	return pp, true
+	co, err := locateContainer(path, po.Spec.Containers)
+	if err != nil {
+		c.App().Flash().Err(err)
+		return nil, nil, false
+	}
+
+	if err := checkRunningStatus(path, po.Status.ContainerStatuses); err != nil {
+		c.App().Flash().Err(err)
+		return nil, nil, false
+	}
+
+	exposedPorts := port.FromContainerPorts(path, co.Ports)
+	if len(exposedPorts) == 0 {
+		c.App().Flash().Err(errors.New("Container exposes no ports"))
+		return nil, nil, false
+	}
+
+	return port.FromContainerPorts(path, co.Ports), po.Annotations, true
 }

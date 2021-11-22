@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/derailed/k9s/internal"
@@ -31,6 +32,7 @@ type Browser struct {
 	accessor   dao.Accessor
 	contextFn  ContextFunc
 	cancelFn   context.CancelFunc
+	mx         sync.RWMutex
 }
 
 // NewBrowser returns a new browser.
@@ -82,6 +84,7 @@ func (b *Browser) Init(ctx context.Context) error {
 	return nil
 }
 
+// InCmdMode checks if prompt is active.
 func (b *Browser) InCmdMode() bool {
 	return b.CmdBuff().InCmdMode()
 }
@@ -124,6 +127,9 @@ func (b *Browser) SetInstance(path string) {
 // Start initializes browser updates.
 func (b *Browser) Start() {
 	b.app.Config.ValidateFavorites()
+	if err := b.app.switchNS(b.GetModel().GetNamespace()); err != nil {
+		log.Error().Err(err).Msgf("ns switch failed")
+	}
 	if err := b.app.Config.Save(); err != nil {
 		log.Error().Err(err).Msgf("Config Save")
 	}
@@ -139,22 +145,26 @@ func (b *Browser) Start() {
 
 // Stop terminates browser updates.
 func (b *Browser) Stop() {
-	if b.cancelFn != nil {
-		b.cancelFn()
-		b.cancelFn = nil
+	b.mx.Lock()
+	{
+		if b.cancelFn != nil {
+			b.cancelFn()
+			b.cancelFn = nil
+		}
 	}
+	b.mx.Unlock()
 	b.GetModel().RemoveListener(b)
 	b.CmdBuff().RemoveListener(b)
 	b.Table.Stop()
 }
 
 // BufferChanged indicates the buffer was changed.
-func (b *Browser) BufferChanged(s string) {}
+func (b *Browser) BufferChanged(_, _ string) {}
 
 // BufferCompleted indicates input was accepted.
-func (b *Browser) BufferCompleted(s string) {
-	if ui.IsLabelSelector(s) {
-		b.GetModel().SetLabelFilter(ui.TrimLabelSelector(s))
+func (b *Browser) BufferCompleted(text, _ string) {
+	if ui.IsLabelSelector(text) {
+		b.GetModel().SetLabelFilter(ui.TrimLabelSelector(text))
 	} else {
 		b.GetModel().SetLabelFilter("")
 	}
@@ -212,7 +222,12 @@ func (b *Browser) Aliases() []string {
 
 // TableDataChanged notifies view new data is available.
 func (b *Browser) TableDataChanged(data render.TableData) {
-	if !b.app.ConOK() || b.cancelFn == nil || !b.app.IsRunning() {
+	var cancel context.CancelFunc
+	b.mx.RLock()
+	cancel = b.cancelFn
+	b.mx.RUnlock()
+
+	if !b.app.ConOK() || cancel == nil || !b.app.IsRunning() {
 		return
 	}
 

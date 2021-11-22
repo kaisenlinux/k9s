@@ -75,6 +75,7 @@ func (d *Details) Init(_ context.Context) error {
 	return nil
 }
 
+// InCmdMode checks if prompt is active.
 func (d *Details) InCmdMode() bool {
 	return d.cmdBuff.InCmdMode()
 }
@@ -106,11 +107,11 @@ func (d *Details) TextFiltered(lines []string, matches fuzzy.Matches) {
 }
 
 // BufferChanged indicates the buffer was changed.
-func (d *Details) BufferChanged(s string) {}
+func (d *Details) BufferChanged(_, _ string) {}
 
 // BufferCompleted indicates input was accepted.
-func (d *Details) BufferCompleted(s string) {
-	d.model.Filter(s)
+func (d *Details) BufferCompleted(text, _ string) {
+	d.model.Filter(text)
 	d.updateTitle()
 }
 

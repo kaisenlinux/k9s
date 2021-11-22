@@ -3,16 +3,15 @@ package config
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
+	"github.com/adrg/xdg"
 	"github.com/derailed/k9s/internal/client"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"github.com/adrg/xdg"
 )
 
 // K9sConfig represents K9s configuration dir env var.
@@ -60,6 +59,7 @@ func K9sHome() string {
 	if env := os.Getenv(K9sConfig); env != "" {
 		return env
 	}
+
 	xdgK9sHome, err := xdg.ConfigFile("k9s")
 	if err != nil {
 		log.Fatal().Err(err).Msg("Unable to create configuration directory for k9s")
@@ -74,21 +74,25 @@ func NewConfig(ks KubeSettings) *Config {
 }
 
 // Refine the configuration based on cli args.
-func (c *Config) Refine(flags *genericclioptions.ConfigFlags, k9sFlags *Flags) error {
-	cfg, err := flags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return err
-	}
+func (c *Config) Refine(flags *genericclioptions.ConfigFlags, k9sFlags *Flags, cfg *client.Config) error {
 	if isSet(flags.Context) {
 		c.K9s.CurrentContext = *flags.Context
 	} else {
-		c.K9s.CurrentContext = cfg.CurrentContext
+		context, err := cfg.CurrentContextName()
+		if err != nil {
+			return err
+		}
+		c.K9s.CurrentContext = context
 	}
 	log.Debug().Msgf("Active Context %q", c.K9s.CurrentContext)
 	if c.K9s.CurrentContext == "" {
 		return errors.New("Invalid kubeconfig context detected")
 	}
-	context, ok := cfg.Contexts[c.K9s.CurrentContext]
+	cc, err := cfg.Contexts()
+	if err != nil {
+		return err
+	}
+	context, ok := cc[c.K9s.CurrentContext]
 	if !ok {
 		return fmt.Errorf("The specified context %q does not exists in kubeconfig", c.K9s.CurrentContext)
 	}
@@ -103,6 +107,8 @@ func (c *Config) Refine(flags *genericclioptions.ConfigFlags, k9sFlags *Flags) e
 		ns, override = *flags.Namespace, true
 	} else if context.Namespace != "" {
 		ns = context.Namespace
+	} else if cl := c.K9s.ActiveCluster(); cl != nil {
+		ns = cl.Namespace.Active
 	}
 
 	if ns != "" {
@@ -218,7 +224,7 @@ func (c *Config) SetConnection(conn client.Connection) {
 
 // Load K9s configuration from file.
 func (c *Config) Load(path string) error {
-	f, err := ioutil.ReadFile(path)
+	f, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -252,7 +258,7 @@ func (c *Config) SaveFile(path string) error {
 		log.Error().Msgf("[Config] Unable to save K9s config file: %v", err)
 		return err
 	}
-	return ioutil.WriteFile(path, cfg, 0644)
+	return os.WriteFile(path, cfg, 0644)
 }
 
 // Validate the configuration.

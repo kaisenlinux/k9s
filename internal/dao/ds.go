@@ -17,7 +17,9 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/kubectl/pkg/polymorphichelpers"
+	"k8s.io/kubectl/pkg/scheme"
 )
 
 var (
@@ -41,7 +43,12 @@ func (d *DaemonSet) IsHappy(ds appsv1.DaemonSet) bool {
 
 // Restart a DaemonSet rollout.
 func (d *DaemonSet) Restart(ctx context.Context, path string) error {
-	ds, err := d.GetInstance(path)
+	o, err := d.Factory.Get("apps/v1/daemonsets", path, true, labels.Everything())
+	if err != nil {
+		return err
+	}
+	var ds appsv1.DaemonSet
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.(*unstructured.Unstructured).Object, &ds)
 	if err != nil {
 		return err
 	}
@@ -53,12 +60,22 @@ func (d *DaemonSet) Restart(ctx context.Context, path string) error {
 	if !auth {
 		return fmt.Errorf("user is not authorized to restart a daemonset")
 	}
-	update, err := polymorphichelpers.ObjectRestarterFn(ds)
+
+	dial, err := d.Client().Dial()
 	if err != nil {
 		return err
 	}
 
-	dial, err := d.Client().Dial()
+	before, err := runtime.Encode(scheme.Codecs.LegacyCodec(appsv1.SchemeGroupVersion), &ds)
+	if err != nil {
+		return err
+	}
+
+	after, err := polymorphichelpers.ObjectRestarterFn(&ds)
+	if err != nil {
+		return err
+	}
+	diff, err := strategicpatch.CreateTwoWayMergePatch(before, after, ds)
 	if err != nil {
 		return err
 	}
@@ -66,9 +83,10 @@ func (d *DaemonSet) Restart(ctx context.Context, path string) error {
 		ctx,
 		ds.Name,
 		types.StrategicMergePatchType,
-		update,
+		diff,
 		metav1.PatchOptions{},
 	)
+
 	return err
 }
 
@@ -86,7 +104,7 @@ func (d *DaemonSet) TailLogs(ctx context.Context, c LogChan, opts *LogOptions) e
 	return podLogs(ctx, c, ds.Spec.Selector.MatchLabels, opts)
 }
 
-func podLogs(ctx context.Context, c LogChan, sel map[string]string, opts *LogOptions) error {
+func podLogs(ctx context.Context, out LogChan, sel map[string]string, opts *LogOptions) error {
 	f, ok := ctx.Value(internal.KeyFactory).(*watch.Factory)
 	if !ok {
 		return errors.New("expecting a context factory")
@@ -110,14 +128,13 @@ func podLogs(ctx context.Context, c LogChan, sel map[string]string, opts *LogOpt
 	po := Pod{}
 	po.Init(f, client.NewGVR("v1/pods"))
 	for _, o := range oo {
-		var pod v1.Pod
-		err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.(*unstructured.Unstructured).Object, &pod)
-		if err != nil {
-			return err
+		u, ok := o.(*unstructured.Unstructured)
+		if !ok {
+			return fmt.Errorf("expected unstructured got %t", o)
 		}
 		opts = opts.Clone()
-		opts.Path = client.FQN(pod.Namespace, pod.Name)
-		if err := po.TailLogs(ctx, c, opts); err != nil {
+		opts.Path = client.FQN(u.GetNamespace(), u.GetName())
+		if err := po.TailLogs(ctx, out, opts); err != nil {
 			return err
 		}
 	}

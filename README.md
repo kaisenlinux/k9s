@@ -243,7 +243,7 @@ K9s uses aliases to navigate most K8s resources.
 | To kill a resource (no confirmation dialog!)                   | `ctrl-k`                      |                                                                        |
 | Launch pulses view                                             | `:`pulses or pu⏎              |                                                                        |
 | Launch XRay view                                               | `:`xray RESOURCE [NAMESPACE]⏎ | RESOURCE can be one of po, svc, dp, rs, sts, ds, NAMESPACE is optional |
-| Launch Popeye view                                             | `:`popeye or pop⏎             | See https://popeyecli.io                                               |
+| Launch Popeye view                                             | `:`popeye or pop⏎             | See [popeye](#popeye)                                               |
 
 ---
 
@@ -278,16 +278,16 @@ K9s uses aliases to navigate most K8s resources.
 
 ## K9s Configuration
 
-  K9s keeps its configurations inside of a `k9s` directory and the location depends on your operating system. K9s leverages [XDG](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) to load its various configurations files.
+  K9s keeps its configurations inside of a `k9s` directory and the location depends on your operating system. K9s leverages [XDG](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) to load its various configurations files. For information on the default locations for your OS please see [this link](https://github.com/adrg/xdg/blob/master/README.md). If you are still confused a quick `k9s info` will reveal where k9s is loading its configurations from. Alternatively, you can set `K9SCONFIG` to tell K9s the directory location to pull its configurations from.
 
-  | Unix            | macOS                       | Windows               |
-  |-----------------|-----------------------------|-----------------------|
-  | `~/.config/k9s` | `~/Library/Preferences/k9s` | `%LOCALAPPDATA%\k9s` |
+  | Unix            | macOS                              | Windows               |
+  |-----------------|------------------------------------|-----------------------|
+  | `~/.config/k9s` | `~/Library/Application Support/k9s` | `%LOCALAPPDATA%\k9s`  |
 
   > NOTE: This is still in flux and will change while in pre-release stage!
 
   ```yaml
-  # $HOME/.config/k9s/config.yml
+  # $XDG_CONFIG_HOME/k9s/config.yml
   k9s:
     # Represents ui poll intervals. Default 2secs
     refreshRate: 2
@@ -359,12 +359,18 @@ K9s uses aliases to navigate most K8s resources.
 
 ---
 
+## <a id="popeye"></a>Popeye Configuration
+
+K9s has integration with [Popeye](https://popeyecli.io/), which is a Kubernetes cluster sanitizer.  Popeye itself uses a configuration called `spinach.yml`, but when integrating with K9s the cluster-specific file should be name `$XDG_CONFIG_HOME/k9s/<context>_spinach.yml`.  This allows you to have a different spinach config per cluster.
+
+---
+
 ## Node Shell
 
 By enabling the nodeShell feature gate on a given cluster, K9s allows you to shell into your cluster nodes. Once enabled, you will have a new `s` for `shell` menu option while in node view. K9s will launch a pod on the selected node using a special k9s_shell pod. Furthermore, you can refine your shell pod by using a custom docker image preloaded with the shell tools you love. By default k9s uses a BusyBox image, but you can configure it as follows:
 
 ```yaml
-# $HOME/.config/k9s/config.yml
+# $XDG_CONFIG_HOME/k9s/config.yml
 k9s:
   clusters:
     # Configures node shell on cluster blee
@@ -388,7 +394,7 @@ k9s:
 In K9s, you can define your very own command aliases (shortnames) to access your resources. In your `$HOME/.config/k9s` define a file called `alias.yml`. A K9s alias defines pairs of alias:gvr. A gvr (Group/Version/Resource) represents a fully qualified Kubernetes resource identifier. Here is an example of an alias file:
 
 ```yaml
-# $HOME/.config/k9s/alias.yml
+# $XDG_CONFIG_HOME/k9s/alias.yml
 alias:
   pp: v1/pods
   crb: rbac.authorization.k8s.io/v1/clusterrolebindings
@@ -402,11 +408,11 @@ Using this alias file, you can now type pp/crb to list pods or ClusterRoleBindin
 
 Entering the command mode and typing a resource name or alias, could be cumbersome for navigating thru often used resources. We're introducing hotkeys that allows a user to define their own hotkeys to activate their favorite resource views. In order to enable hotkeys please follow these steps:
 
-1. Create a file named `$HOME/.config/k9s/hotkey.yml`
+1. Create a file named `$XDG_CONFIG_HOME/k9s/hotkey.yml`
 2. Add the following to your `hotkey.yml`. You can use resource name/short name to specify a command ie same as typing it while in command mode.
 
       ```yaml
-      # $HOME/.config/k9s/hotkey.yml
+      # $XDG_CONFIG_HOME/k9s/hotkey.yml
       hotKey:
         # Hitting Shift-0 navigates to your pod view
         shift-0:
@@ -433,18 +439,67 @@ Entering the command mode and typing a resource name or alias, could be cumberso
 
 ---
 
+## FastForwards
+
+As of v0.25.0, you can leverage the `FastForwards` feature to tell K9s how to default port-forwards. In situations where you are dealing with multiple containers or containers exposing multiple ports, it can be cumbersome to specify the desired port-forward from the dialog as in most cases, you already know which container/port tuple you desire. For these use cases, you can now annotate your manifests with the following annotations:
+
+1. k9scli.io/auto-portforwards -> activates one or more port-forwards directly bypassing the port-forward dialog all together.
+2. k9scli.io/portforwards      -> pre-selects one or more port-forwards when launching the port-forward dialog.
+
+The annotation value takes on the shape `container-name::[local-port:]container-port`
+
+> NOTE: for either cases above you can specify the container port by name or number in your annotation!
+
+### Example
+
+```yaml
+# Pod fred
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fred
+  annotations:
+    k9scli.io/auto-portforwards: zorg::5556        # => will default to container zorg port 5556 and local port 5566. No port-forward dialog will be shown.
+    # Or...
+    k9scli.io/portforward: bozo::9090:p1           # => launches the port-forward dialog selecting default port-forward on container bozo port named p1(8081)
+                                                   # mapping to local port 9090.
+    ...
+spec:
+  containers:
+  - name: zorg
+    ports:
+    - name: p1
+      containerPort: 5556
+    ...
+  - name: bozo
+    ports:
+    - name: p1
+      containerPort: 8081
+    - name: p2
+      containerPort: 5555
+    ...
+```
+
+The annotation value must specify a container to forward to as well as a local port and container port. The container port may be specified as either a port number or port name. If the local port is omitted then the local port will default to the container port number. Here are a few examples:
+
+1. bozo::http      - creates a pf on container `bozo` with port name http. If http specifies port number 8080 then the local port will be 8080 as well.
+2. bozo::9090:http - creates a pf on container `bozo` mapping local port 9090->http(8080)
+3. bozo::9090:8080 - creates a pf on container `bozo` mapping local port 9090->8080
+
+---
+
 ## Resource Custom Columns
 
 [SneakCast v0.17.0 on The Beach! - Yup! sound is sucking but what a setting!](https://youtu.be/7S33CNLAofk)
 
-You can change which columns shows up for a given resource via custom views. To surface this feature, you will need to create a new configuration file, namely `$HOME/.config/k9s/views.yml`. This file leverages GVR (Group/Version/Resource) to configure the associated table view columns. If no GVR is found for a view the default rendering will take over (ie what we have now). Going wide will add all the remaining columns that are available on the given resource after your custom columns. To boot, you can edit your views config file and tune your resources views live!
+You can change which columns shows up for a given resource via custom views. To surface this feature, you will need to create a new configuration file, namely `$XDG_CONFIG_HOME/k9s/views.yml`. This file leverages GVR (Group/Version/Resource) to configure the associated table view columns. If no GVR is found for a view the default rendering will take over (ie what we have now). Going wide will add all the remaining columns that are available on the given resource after your custom columns. To boot, you can edit your views config file and tune your resources views live!
 
 > NOTE: This is experimental and will most likely change as we iron this out!
 
 Here is a sample views configuration that customize a pods and services views.
 
 ```yaml
-# $HOME/.config/k9s/views.yml
+# $XDG_CONFIG_HOME/k9s/views.yml
 k9s:
   views:
     v1/pods:
@@ -469,7 +524,7 @@ k9s:
 
 ## Plugins
 
-K9s allows you to extend your command line and tooling by defining your very own cluster commands via plugins. K9s will look at `$HOME/.config/k9s/plugin.yml` to locate all available plugins. A plugin is defined as follows:
+K9s allows you to extend your command line and tooling by defining your very own cluster commands via plugins. K9s will look at `$XDG_CONFIG_HOME/k9s/plugin.yml` to locate all available plugins. A plugin is defined as follows:
 
 * Shortcut option represents the key combination a user would type to activate the plugin
 * Confirm option (when enabled) lets you see the command that is going to be executed and gives you an option to confirm or prevent execution
@@ -501,7 +556,7 @@ K9s does provide additional environment variables for you to customize your plug
 This defines a plugin for viewing logs on a selected pod using `ctrl-l` for shortcut.
 
 ```yaml
-# $HOME/.config/k9s/plugin.yml
+# $XDG_CONFIG_HOME/k9s/plugin.yml
 plugin:
   # Defines a plugin to provide a `ctrl-l` shortcut to tail the logs while in pod view.
   fred:
@@ -539,12 +594,12 @@ Initially, the benchmarks will run with the following defaults:
 * HTTP Verb: GET
 * Path: /
 
-The PortForward view is backed by a new K9s config file namely: `$HOME/.config/k9s/bench-<k8s_context>.yml` (note: extension is `yml` and not `yaml`). Each cluster you connect to will have its own bench config file, containing the name of the K8s context for the cluster. Changes to this file should automatically update the PortForward view to indicate how you want to run your benchmarks.
+The PortForward view is backed by a new K9s config file namely: `$XDG_CONFIG_HOME/k9s/bench-<k8s_context>.yml` (note: extension is `yml` and not `yaml`). Each cluster you connect to will have its own bench config file, containing the name of the K8s context for the cluster. Changes to this file should automatically update the PortForward view to indicate how you want to run your benchmarks.
 
 Here is a sample benchmarks.yml configuration. Please keep in mind this file will likely change in subsequent releases!
 
 ```yaml
-# This file resides in $HOME/.config/k9s/bench-mycontext.yml
+# This file resides in $XDG_CONFIG_HOME/k9s/bench-mycontext.yml
 benchmarks:
   # Indicates the default concurrency and number of requests setting if a container or service rule does not match.
   defaults:
@@ -692,9 +747,9 @@ Example: Dracula Skin ;)
 
 <img src="assets/skins/dracula.png" alt="Dracula Skin">
 
-You can style K9s based on your own sense of look and style. Skins are YAML files, that enable a user to change the K9s presentation layer. K9s skins are loaded from `$HOME/.config/k9s/skin.yml`. If a skin file is detected then the skin would be loaded if not the current stock skin remains in effect.
+You can style K9s based on your own sense of look and style. Skins are YAML files, that enable a user to change the K9s presentation layer. K9s skins are loaded from `$XDG_CONFIG_HOME/k9s/skin.yml`. If a skin file is detected then the skin would be loaded if not the current stock skin remains in effect.
 
-You can also change K9s skins based on the cluster you are connecting too. In this case, you can specify the skin file name as `$HOME/.config/k9s/mycontext_skin.yml`
+You can also change K9s skins based on the cluster you are connecting too. In this case, you can specify the skin file name as `$XDG_CONFIG_HOME/k9s/mycontext_skin.yml`
 Below is a sample skin file, more skins are available in the skins directory in this repo, just simply copy any of these in your user's home dir as `skin.yml`.
 
 Colors can be defined by name or using a hex representation. Of recent, we've added a color named `default` to indicate a transparent background color to preserve your terminal background color settings if so desired.

@@ -17,6 +17,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func parsePFAnn(s string) (string, string, bool) {
+	tokens := strings.Split(s, ":")
+	if len(tokens) != 2 {
+		return "", "", false
+	}
+
+	return tokens[0], tokens[1], true
+}
+
 func k8sEnv(c *client.Config) Env {
 	ctx, err := c.CurrentContextName()
 	if err != nil {
@@ -123,7 +132,7 @@ func extractApp(ctx context.Context) (*App, error) {
 // AsKey maps a string representation of a key to a tcell key.
 func asKey(key string) (tcell.Key, error) {
 	for k, v := range tcell.KeyNames {
-		if v == key {
+		if key == v {
 			return k, nil
 		}
 	}

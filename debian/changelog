@@ -1,3 +1,9 @@
+k9s (0.25.4-1kaisen) kaisen-packages; urgency=medium
+
+  * Import 0.25.4 version
+
+ -- Kevin Chevreuil - Kaisen <kaisen@kaisenlinux.org>  Mon, 22 Nov 2021 12:57:11 +0200
+
 k9s (0.24.15-1kaisen) kaisen-packages; urgency=medium
 
   * First packaging for Kaisen Linux

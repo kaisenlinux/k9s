@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -18,6 +19,7 @@ import (
 	"github.com/derailed/k9s/internal/config"
 	"github.com/derailed/k9s/internal/model"
 	"github.com/derailed/k9s/internal/ui"
+	"github.com/derailed/k9s/internal/ui/dialog"
 	"github.com/derailed/k9s/internal/watch"
 	"github.com/derailed/tview"
 	"github.com/gdamore/tcell/v2"
@@ -89,13 +91,7 @@ func (a *App) Init(version string, rate int) error {
 	if a.Conn() == nil {
 		return errors.New("No client connection detected")
 	}
-	ns, err := a.Conn().Config().CurrentNamespaceName()
-	log.Debug().Msgf("CURRENT-NS %q -- %v", ns, err)
-	if err != nil {
-		log.Info().Msg("No namespace specified using cluster default namespace")
-	} else if err = a.Config.SetActiveNamespace(ns); err != nil {
-		log.Error().Err(err).Msgf("Fail to set active namespace to %q", ns)
-	}
+	ns := a.Config.ActiveNamespace()
 
 	a.factory = watch.NewFactory(a.Conn())
 	ok, err := a.isValidNS(ns)
@@ -107,8 +103,10 @@ func (a *App) Init(version string, rate int) error {
 	a.clusterModel = model.NewClusterInfo(a.factory, a.version)
 	a.clusterModel.AddListener(a.clusterInfo())
 	a.clusterModel.AddListener(a.statusIndicator())
-	a.clusterModel.Refresh()
-	a.clusterInfo().Init()
+	if a.Conn().ConnectionOK() {
+		a.clusterModel.Refresh()
+		a.clusterInfo().Init()
+	}
 
 	a.command = NewCommand(a)
 	if err := a.command.Init(); err != nil {
@@ -185,12 +183,20 @@ func (a *App) keyboard(evt *tcell.EventKey) *tcell.EventKey {
 
 func (a *App) bindKeys() {
 	a.AddActions(ui.KeyActions{
+		ui.KeyShiftG:   ui.NewSharedKeyAction("DumpGOR", a.dumpGOR, false),
 		tcell.KeyCtrlE: ui.NewSharedKeyAction("ToggleHeader", a.toggleHeaderCmd, false),
 		tcell.KeyCtrlG: ui.NewSharedKeyAction("toggleCrumbs", a.toggleCrumbsCmd, false),
 		ui.KeyHelp:     ui.NewSharedKeyAction("Help", a.helpCmd, false),
 		tcell.KeyCtrlA: ui.NewSharedKeyAction("Aliases", a.aliasCmd, false),
 		tcell.KeyEnter: ui.NewKeyAction("Goto", a.gotoCmd, false),
 	})
+}
+
+func (a *App) dumpGOR(evt *tcell.EventKey) *tcell.EventKey {
+	bb := make([]byte, 5_000_000)
+	runtime.Stack(bb, true)
+	log.Debug().Msgf("GOR\n%s", string(bb))
+	return evt
 }
 
 // ActiveView returns the currently active view.
@@ -556,10 +562,8 @@ func (a *App) gotoCmd(evt *tcell.EventKey) *tcell.EventKey {
 	return evt
 }
 
-func (a *App) meowCmd(msg string) {
-	if err := a.inject(NewCow(a, msg)); err != nil {
-		a.Flash().Err(err)
-	}
+func (a *App) cowCmd(msg string) {
+	dialog.ShowError(a.Styles.Dialog(), a.Content.Pages, msg)
 }
 
 func (a *App) dirCmd(path string) error {
@@ -622,20 +626,14 @@ func (a *App) gotoResource(cmd, path string, clearStack bool) {
 		return
 	}
 
-	c := NewCow(a, err.Error())
-	_ = c.Init(context.Background())
-	if clearStack {
-		a.Content.Stack.Clear()
-	}
-	a.Content.Push(c)
+	dialog.ShowError(a.Styles.Dialog(), a.Content.Pages, err.Error())
 }
 
 func (a *App) inject(c model.Component) error {
 	ctx := context.WithValue(context.Background(), internal.KeyApp, a)
 	if err := c.Init(ctx); err != nil {
 		log.Error().Err(err).Msgf("component init failed for %q %v", c.Name(), err)
-		c = NewCow(a, err.Error())
-		_ = c.Init(ctx)
+		dialog.ShowError(a.Styles.Dialog(), a.Content.Pages, err.Error())
 	}
 	a.Content.Push(c)
 
