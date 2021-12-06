@@ -22,6 +22,10 @@ func (c ContainerPortSpecs) Dump() string {
 
 // InSpecs checks if given port matches a spec.
 func (c ContainerPortSpecs) MatchSpec(s string) bool {
+	// Skip validation if No port are exposed or no container port spec.
+	if len(c) == 0 || !strings.Contains(s, "::") {
+		return true
+	}
 	for _, spec := range c {
 		if spec.MatchSpec(s) {
 			return true

@@ -10,7 +10,6 @@ import (
 	"github.com/derailed/k9s/internal/client"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v2"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
@@ -20,8 +19,6 @@ const K9sConfig = "K9SCONFIG"
 var (
 	// K9sConfigFile represents K9s config file location.
 	K9sConfigFile = filepath.Join(K9sHome(), "config.yml")
-	// K9sLogs represents K9s log.
-	K9sLogs = filepath.Join(os.TempDir(), fmt.Sprintf("k9s-%s.log", MustK9sUser()))
 	// K9sDumpDir represents a directory where K9s screen dumps will be persisted.
 	K9sDumpDir = filepath.Join(os.TempDir(), fmt.Sprintf("k9s-screens-%s", MustK9sUser()))
 )
@@ -40,9 +37,6 @@ type (
 
 		// ClusterNames() returns all available cluster names.
 		ClusterNames() ([]string, error)
-
-		// NamespaceNames returns all available namespace names.
-		NamespaceNames(nn []v1.Namespace) []string
 	}
 
 	// Config tracks K9s configuration options.
