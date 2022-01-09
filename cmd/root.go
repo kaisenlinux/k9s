@@ -2,9 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"runtime/debug"
-
 	"github.com/derailed/k9s/internal/client"
 	"github.com/derailed/k9s/internal/color"
 	"github.com/derailed/k9s/internal/config"
@@ -14,6 +11,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"os"
+	"runtime/debug"
 )
 
 const (
@@ -53,6 +52,17 @@ func Execute() {
 }
 
 func run(cmd *cobra.Command, args []string) {
+	config.EnsurePath(*k9sFlags.LogFile, config.DefaultDirMod)
+	mod := os.O_CREATE | os.O_APPEND | os.O_WRONLY
+	file, err := os.OpenFile(*k9sFlags.LogFile, mod, config.DefaultFileMod)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		if file != nil {
+			_ = file.Close()
+		}
+	}()
 	defer func() {
 		if err := recover(); err != nil {
 			log.Error().Msgf("Boom! %v", err)
@@ -63,15 +73,6 @@ func run(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	config.EnsurePath(*k9sFlags.LogFile, config.DefaultDirMod)
-	mod := os.O_CREATE | os.O_APPEND | os.O_WRONLY
-	file, err := os.OpenFile(*k9sFlags.LogFile, mod, config.DefaultFileMod)
-	defer func() {
-		_ = file.Close()
-	}()
-	if err != nil {
-		panic(err)
-	}
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: file})
 
 	zerolog.SetGlobalLevel(parseLevel(*k9sFlags.LogLevel))
@@ -108,6 +109,7 @@ func loadConfiguration() *config.Config {
 	k9sCfg.K9s.OverrideReadOnly(*k9sFlags.ReadOnly)
 	k9sCfg.K9s.OverrideWrite(*k9sFlags.Write)
 	k9sCfg.K9s.OverrideCommand(*k9sFlags.Command)
+	k9sCfg.K9s.OverrideScreenDumpDir(*k9sFlags.ScreenDumpDir)
 
 	if err := k9sCfg.Refine(k8sFlags, k9sFlags, k8sCfg); err != nil {
 		log.Error().Err(err).Msgf("refine failed")
@@ -120,7 +122,7 @@ func loadConfiguration() *config.Config {
 	}
 	// Try to access server version if that fail. Connectivity issue?
 	if !k9sCfg.GetConnection().CheckConnectivity() {
-		log.Panic().Msgf("Cannot connect to cluster")
+		log.Panic().Msgf("Cannot connect to cluster %s", k9sCfg.K9s.CurrentCluster)
 	}
 	if !k9sCfg.GetConnection().ConnectionOK() {
 		panic("No connectivity")
@@ -135,6 +137,8 @@ func loadConfiguration() *config.Config {
 
 func parseLevel(level string) zerolog.Level {
 	switch level {
+	case "trace":
+		return zerolog.TraceLevel
 	case "debug":
 		return zerolog.DebugLevel
 	case "warn":
@@ -160,7 +164,7 @@ func initK9sFlags() {
 		k9sFlags.LogLevel,
 		"logLevel", "l",
 		config.DefaultLogLevel,
-		"Specify a log level (info, warn, debug, error, fatal, panic, trace)",
+		"Specify a log level (info, warn, debug, trace, error)",
 	)
 	rootCmd.Flags().StringVarP(
 		k9sFlags.LogFile,
@@ -210,10 +214,17 @@ func initK9sFlags() {
 		false,
 		"Sets write mode by overriding the readOnly configuration setting",
 	)
+	rootCmd.Flags().StringVar(
+		k9sFlags.ScreenDumpDir,
+		"screen-dump-dir",
+		"",
+		"Sets a path to a dir for a screen dumps",
+	)
+	rootCmd.Flags()
 }
 
 func initK8sFlags() {
-	k8sFlags = genericclioptions.NewConfigFlags(false)
+	k8sFlags = genericclioptions.NewConfigFlags(client.UsePersistentConfig)
 
 	rootCmd.Flags().StringVar(
 		k8sFlags.KubeConfig,

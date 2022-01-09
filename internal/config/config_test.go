@@ -60,8 +60,7 @@ func TestConfigRefine(t *testing.T) {
 		t.Run(k, func(t *testing.T) {
 			mc := NewMockConnection()
 			m.When(mc.ValidNamespaces()).ThenReturn(namespaces(), nil)
-			mk := NewMockKubeSettings()
-			m.When(mk.NamespaceNames(namespaces())).ThenReturn([]string{"default"})
+			mk := newMockSettings(u.flags)
 			cfg := config.NewConfig(mk)
 
 			err := cfg.Refine(u.flags, nil, client.NewConfig(u.flags))
@@ -199,7 +198,7 @@ func TestConfigSaveFile(t *testing.T) {
 	m.When(mk.CurrentContextName()).ThenReturn("minikube", nil)
 	m.When(mk.CurrentClusterName()).ThenReturn("minikube", nil)
 	m.When(mk.CurrentNamespaceName()).ThenReturn("default", nil)
-	m.When(mk.ClusterNames()).ThenReturn([]string{"minikube", "fred", "blee"}, nil)
+	m.When(mk.ClusterNames()).ThenReturn(map[string]struct{}{"minikube": {}, "fred": {}, "blee": {}}, nil)
 	m.When(mk.NamespaceNames(namespaces())).ThenReturn([]string{"default"})
 
 	cfg := config.NewConfig(mk)
@@ -229,7 +228,7 @@ func TestConfigReset(t *testing.T) {
 	m.When(mk.CurrentContextName()).ThenReturn("blee", nil)
 	m.When(mk.CurrentClusterName()).ThenReturn("blee", nil)
 	m.When(mk.CurrentNamespaceName()).ThenReturn("default", nil)
-	m.When(mk.ClusterNames()).ThenReturn([]string{"blee"}, nil)
+	m.When(mk.ClusterNames()).ThenReturn(map[string]struct{}{"blee": {}}, nil)
 	m.When(mk.NamespaceNames(namespaces())).ThenReturn([]string{"default"})
 
 	cfg := config.NewConfig(mk)
@@ -255,6 +254,24 @@ func TestSetup(t *testing.T) {
 		fmt.Println("Boom!", m, i)
 	})
 }
+
+type mockSettings struct {
+	flags *genericclioptions.ConfigFlags
+}
+
+var _ config.KubeSettings = (*mockSettings)(nil)
+
+func newMockSettings(flags *genericclioptions.ConfigFlags) *mockSettings {
+	return &mockSettings{flags: flags}
+}
+func (m *mockSettings) CurrentContextName() (string, error) {
+	return *m.flags.Context, nil
+}
+func (m *mockSettings) CurrentClusterName() (string, error) { return "", nil }
+func (m *mockSettings) CurrentNamespaceName() (string, error) {
+	return *m.flags.Namespace, nil
+}
+func (m *mockSettings) ClusterNames() (map[string]struct{}, error) { return nil, nil }
 
 // ----------------------------------------------------------------------------
 // Test Data...
@@ -347,6 +364,7 @@ var expectedConfig = `k9s:
     memory:
       critical: 90
       warn: 70
+  screenDumpDir: /tmp
 `
 
 var resetConfig = `k9s:
@@ -393,4 +411,5 @@ var resetConfig = `k9s:
     memory:
       critical: 90
       warn: 70
+  screenDumpDir: /tmp
 `

@@ -28,7 +28,10 @@ type LogOptions struct {
 
 // Info returns the option pod and container info.
 func (o *LogOptions) Info() string {
-	return fmt.Sprintf("%q::%q", o.Path, o.Container)
+	if len(o.Container) != 0 {
+		return fmt.Sprintf("%s (%s)", o.Path, o.Container)
+	}
+	return o.Path
 }
 
 // Clone clones options.
@@ -39,6 +42,7 @@ func (o *LogOptions) Clone() *LogOptions {
 		DefaultContainer: o.DefaultContainer,
 		Lines:            o.Lines,
 		Previous:         o.Previous,
+		Head:             o.Head,
 		SingleContainer:  o.SingleContainer,
 		MultiPods:        o.MultiPods,
 		ShowTimestamp:    o.ShowTimestamp,
@@ -79,14 +83,9 @@ func (o *LogOptions) ToPodLogOptions() *v1.PodLogOptions {
 		TailLines:  &o.Lines,
 	}
 	if o.Head {
-		var maxBytes int64 = 1000
-		//var defaultTail int64 = -1
-		//var defaultSince int64
-
+		var maxBytes int64 = 5000
 		opts.Follow = false
 		opts.TailLines, opts.SinceSeconds, opts.SinceTime = nil, nil, nil
-		//opts.TailLines = &defaultTail
-		//opts.SinceSeconds = &defaultSince
 		opts.LimitBytes = &maxBytes
 		return &opts
 	}
@@ -109,8 +108,8 @@ func (o *LogOptions) ToPodLogOptions() *v1.PodLogOptions {
 	return &opts
 }
 
-// DecorateLog add a log header to display po/co information along with the log message.
-func (o *LogOptions) DecorateLog(bytes []byte) *LogItem {
+// ToLogItem add a log header to display po/co information along with the log message.
+func (o *LogOptions) ToLogItem(bytes []byte) *LogItem {
 	item := NewLogItem(bytes)
 	if len(bytes) == 0 {
 		return item
@@ -126,5 +125,12 @@ func (o *LogOptions) DecorateLog(bytes []byte) *LogItem {
 		item.Container = o.Container
 	}
 
+	return item
+}
+
+func (o *LogOptions) ToErrLogItem(err error) *LogItem {
+	t := time.Now().UTC().Format(time.RFC3339Nano)
+	item := NewLogItem([]byte(fmt.Sprintf("%s [orange::b]%s[::-]\n", t, err)))
+	item.IsError = true
 	return item
 }

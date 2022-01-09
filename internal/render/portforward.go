@@ -12,8 +12,8 @@ import (
 
 // Forwarder represents a port forwarder.
 type Forwarder interface {
-	// Path returns a resource FQN.
-	Path() string
+	// ID returns the PF FQN.
+	ID() string
 
 	// Container returns a container name.
 	Container() string
@@ -29,7 +29,9 @@ type Forwarder interface {
 }
 
 // PortForward renders a portforwards to screen.
-type PortForward struct{}
+type PortForward struct {
+	Base
+}
 
 // ColorerFunc colors a resource row.
 func (PortForward) ColorerFunc() ColorerFunc {
@@ -61,9 +63,9 @@ func (f PortForward) Render(o interface{}, gvr string, r *Row) error {
 	}
 
 	ports := strings.Split(pf.Port(), ":")
-	ns, n := client.Namespaced(pf.Path())
+	r.ID = pf.ID()
+	ns, n := client.Namespaced(r.ID)
 
-	r.ID = pf.Path()
 	r.Fields = Fields{
 		ns,
 		trimContainer(n),

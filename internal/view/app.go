@@ -183,7 +183,7 @@ func (a *App) keyboard(evt *tcell.EventKey) *tcell.EventKey {
 
 func (a *App) bindKeys() {
 	a.AddActions(ui.KeyActions{
-		ui.KeyShiftG:   ui.NewSharedKeyAction("DumpGOR", a.dumpGOR, false),
+		ui.KeyShift9:   ui.NewSharedKeyAction("DumpGOR", a.dumpGOR, false),
 		tcell.KeyCtrlE: ui.NewSharedKeyAction("ToggleHeader", a.toggleHeaderCmd, false),
 		tcell.KeyCtrlG: ui.NewSharedKeyAction("toggleCrumbs", a.toggleCrumbsCmd, false),
 		ui.KeyHelp:     ui.NewSharedKeyAction("Help", a.helpCmd, false),
@@ -193,9 +193,10 @@ func (a *App) bindKeys() {
 }
 
 func (a *App) dumpGOR(evt *tcell.EventKey) *tcell.EventKey {
-	bb := make([]byte, 5_000_000)
-	runtime.Stack(bb, true)
-	log.Debug().Msgf("GOR\n%s", string(bb))
+	log.Debug().Msgf("GOR %d", runtime.NumGoroutine())
+	// bb := make([]byte, 5_000_000)
+	// runtime.Stack(bb, true)
+	// log.Debug().Msgf("GOR\n%s", string(bb))
 	return evt
 }
 
@@ -276,10 +277,10 @@ func (a *App) Resume() {
 
 	go a.clusterUpdater(ctx)
 	if err := a.StylesWatcher(ctx, a); err != nil {
-		log.Error().Err(err).Msgf("Styles watcher failed")
+		log.Warn().Err(err).Msgf("Styles watcher failed")
 	}
 	if err := a.CustomViewsWatcher(ctx, a); err != nil {
-		log.Error().Err(err).Msgf("CustomView watcher failed")
+		log.Warn().Err(err).Msgf("CustomView watcher failed")
 	}
 }
 
@@ -357,6 +358,10 @@ func (a *App) switchNS(ns string) error {
 	if ns == client.ClusterScope {
 		ns = client.AllNamespaces
 	}
+	if ns == a.Config.ActiveNamespace() {
+		return nil
+	}
+
 	ok, err := a.isValidNS(ns)
 	if err != nil {
 		return err
@@ -365,7 +370,10 @@ func (a *App) switchNS(ns string) error {
 		return fmt.Errorf("Invalid namespace %q", ns)
 	}
 	if err := a.Config.SetActiveNamespace(ns); err != nil {
-		return fmt.Errorf("Unable to save active namespace in config")
+		return err
+	}
+	if err := a.Config.Save(); err != nil {
+		return err
 	}
 
 	return a.factory.SetActiveNS(ns)
@@ -390,7 +398,7 @@ func (a *App) isValidNS(ns string) (bool, error) {
 	return true, nil
 }
 
-func (a *App) switchCtx(name string, loadPods bool) error {
+func (a *App) switchContext(name string, loadPods bool) error {
 	log.Debug().Msgf("--> Switching Context %q--%q", name, a.Config.ActiveView())
 	a.Halt()
 	defer a.Resume()
@@ -401,18 +409,27 @@ func (a *App) switchCtx(name string, loadPods bool) error {
 		}
 		a.initFactory(ns)
 
-		if err := a.command.Reset(true); err != nil {
-			return err
+		if e := a.command.Reset(true); e != nil {
+			return e
 		}
 		v := a.Config.ActiveView()
 		if v == "" || isContextCmd(v) || loadPods {
 			v = "pod"
 			a.Config.SetActiveView(v)
 		}
-		if err := a.Config.Save(); err != nil {
-			log.Error().Err(err).Msg("Config save failed!")
-		}
 		a.Config.Reset()
+		a.Config.K9s.CurrentContext = name
+		cluster, err := a.Conn().Config().CurrentClusterName()
+		if err != nil {
+			return err
+		}
+		a.Config.K9s.CurrentCluster = cluster
+		if err := a.Config.SetActiveNamespace(ns); err != nil {
+			log.Error().Err(err).Msg("unable to set active ns")
+		}
+		if err := a.Config.Save(); err != nil {
+			log.Error().Err(err).Msg("config save failed!")
+		}
 
 		a.Flash().Infof("Switching context to %s", name)
 		a.ReloadStyles(name)
@@ -632,7 +649,7 @@ func (a *App) gotoResource(cmd, path string, clearStack bool) {
 func (a *App) inject(c model.Component) error {
 	ctx := context.WithValue(context.Background(), internal.KeyApp, a)
 	if err := c.Init(ctx); err != nil {
-		log.Error().Err(err).Msgf("component init failed for %q %v", c.Name(), err)
+		log.Error().Err(err).Msgf("component init failed for %q", c.Name())
 		dialog.ShowError(a.Styles.Dialog(), a.Content.Pages, err.Error())
 	}
 	a.Content.Push(c)

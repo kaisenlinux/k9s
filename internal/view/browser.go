@@ -134,16 +134,13 @@ func (b *Browser) Start() {
 	if err := b.app.switchNS(ns); err != nil {
 		log.Error().Err(err).Msgf("ns switch failed")
 	}
-	if err := b.app.Config.Save(); err != nil {
-		log.Error().Err(err).Msgf("Config Save")
-	}
 
 	b.Stop()
 	b.GetModel().AddListener(b)
 	b.Table.Start()
 	b.CmdBuff().AddListener(b)
 	if err := b.GetModel().Watch(b.prepareContext()); err != nil {
-		log.Error().Err(err).Msgf("Watcher failed for %s", b.GVR())
+		b.App().Flash().Err(fmt.Errorf("Watcher failed for %s -- %w", b.GVR(), err))
 	}
 }
 

@@ -36,7 +36,7 @@ func (l *Logger) Init(_ context.Context) error {
 	if l.title != "" {
 		l.SetBorder(true)
 	}
-	l.SetScrollable(true).SetWrap(true).SetRegions(true)
+	l.SetScrollable(true).SetWrap(true)
 	l.SetDynamicColors(true)
 	l.SetHighlightColor(tcell.ColorOrange)
 	l.SetTitleColor(tcell.ColorAqua)
@@ -152,7 +152,7 @@ func (l *Logger) resetCmd(evt *tcell.EventKey) *tcell.EventKey {
 }
 
 func (l *Logger) saveCmd(evt *tcell.EventKey) *tcell.EventKey {
-	if path, err := saveYAML(l.app.Config.K9s.CurrentCluster, l.title, l.GetText(true)); err != nil {
+	if path, err := saveYAML(l.app.Config.K9s.GetScreenDumpDir(), l.app.Config.K9s.CurrentCluster, l.title, l.GetText(true)); err != nil {
 		l.app.Flash().Err(err)
 	} else {
 		l.app.Flash().Infof("Log %s saved successfully!", path)

@@ -24,7 +24,7 @@ func TestTableSave(t *testing.T) {
 	v.Init(makeContext())
 	v.SetTitle("k9s-test")
 
-	dir := filepath.Join(config.K9sDumpDir, v.app.Config.K9s.CurrentCluster)
+	dir := filepath.Join(v.app.Config.K9s.GetScreenDumpDir(), v.app.Config.K9s.CurrentCluster)
 	c1, _ := os.ReadDir(dir)
 	v.saveCmd(nil)
 
@@ -95,6 +95,7 @@ var _ ui.Tabular = (*mockTableModel)(nil)
 func (t *mockTableModel) SetInstance(string)                 {}
 func (t *mockTableModel) SetLabelFilter(string)              {}
 func (t *mockTableModel) Empty() bool                        { return false }
+func (t *mockTableModel) Count() int                         { return 1 }
 func (t *mockTableModel) HasMetrics() bool                   { return true }
 func (t *mockTableModel) Peek() render.TableData             { return makeTableData() }
 func (t *mockTableModel) Refresh(context.Context) error      { return nil }
@@ -171,8 +172,8 @@ func (k ks) CurrentNamespaceName() (string, error) {
 	return "test", nil
 }
 
-func (k ks) ClusterNames() ([]string, error) {
-	return []string{"test"}, nil
+func (k ks) ClusterNames() (map[string]struct{}, error) {
+	return map[string]struct{}{"test": {}}, nil
 }
 
 func (k ks) NamespaceNames(nn []v1.Namespace) []string {

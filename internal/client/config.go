@@ -15,23 +15,22 @@ import (
 )
 
 const (
-	defaultCallTimeoutDuration time.Duration = 5 * time.Second
+	defaultCallTimeoutDuration time.Duration = 10 * time.Second
+
+	// UsePersistentConfig caches client config to avoid reloads.
+	UsePersistentConfig = true
 )
 
 // Config tracks a kubernetes configuration.
 type Config struct {
-	flags      *genericclioptions.ConfigFlags
-	clientCfg  clientcmd.ClientConfig
-	rawCfg     *clientcmdapi.Config
-	mutex      *sync.RWMutex
-	OverrideNS bool
+	flags *genericclioptions.ConfigFlags
+	mutex *sync.RWMutex
 }
 
 // NewConfig returns a new k8s config or an error if the flags are invalid.
 func NewConfig(f *genericclioptions.ConfigFlags) *Config {
 	return &Config{
 		flags: f,
-		// pathOptions: clientcmd.NewDefaultPathOptions(),
 		mutex: &sync.RWMutex{},
 	}
 }
@@ -58,52 +57,27 @@ func (c *Config) Flags() *genericclioptions.ConfigFlags {
 	return c.flags
 }
 
-func (c *Config) rawConfig() (*clientcmdapi.Config, error) {
-	if c.rawCfg != nil {
-		return c.rawCfg, nil
-	}
-
-	cfg, err := c.clientConfig().RawConfig()
-	if err != nil {
-		return nil, err
-	}
-	c.rawCfg = &cfg
-
-	return c.rawCfg, nil
+func (c *Config) RawConfig() (clientcmdapi.Config, error) {
+	return c.clientConfig().RawConfig()
 }
 
 func (c *Config) clientConfig() clientcmd.ClientConfig {
-	if c.clientCfg != nil {
-		return c.clientCfg
-	}
-	c.clientCfg = c.flags.ToRawKubeConfigLoader()
-
-	return c.clientCfg
+	return c.flags.ToRawKubeConfigLoader()
 }
 
-func (c *Config) reset() {
-	c.clientCfg, c.rawCfg = nil, nil
-}
+func (c *Config) reset() {}
 
 // SwitchContext changes the kubeconfig context to a new cluster.
 func (c *Config) SwitchContext(name string) error {
-	if n, err := c.CurrentContextName(); err == nil && n == name {
-		return nil
-	}
-	context, err := c.GetContext(name)
-	if err != nil {
+	if _, err := c.GetContext(name); err != nil {
 		return fmt.Errorf("context %q does not exist", name)
 	}
-	c.flags.Namespace = &context.Namespace
-	c.flags.Context = &name
-	c.flags.ClusterName = &(context.Cluster)
-	c.reset()
+	flags := genericclioptions.NewConfigFlags(UsePersistentConfig)
+	flags.Context = &name
+	flags.Timeout = c.flags.Timeout
+	c.flags = flags
 
 	return nil
-}
-
-func (c *Config) RawConfig() *clientcmdapi.Config {
-	return c.rawCfg
 }
 
 // CurrentContextName returns the currently active config context.
@@ -111,7 +85,7 @@ func (c *Config) CurrentContextName() (string, error) {
 	if isSet(c.flags.Context) {
 		return *c.flags.Context, nil
 	}
-	cfg, err := c.rawConfig()
+	cfg, err := c.RawConfig()
 	if err != nil {
 		return "", err
 	}
@@ -121,7 +95,7 @@ func (c *Config) CurrentContextName() (string, error) {
 
 // GetContext fetch a given context or error if it does not exists.
 func (c *Config) GetContext(n string) (*clientcmdapi.Context, error) {
-	cfg, err := c.rawConfig()
+	cfg, err := c.RawConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +108,7 @@ func (c *Config) GetContext(n string) (*clientcmdapi.Context, error) {
 
 // Contexts fetch all available contexts.
 func (c *Config) Contexts() (map[string]*clientcmdapi.Context, error) {
-	cfg, err := c.rawConfig()
+	cfg, err := c.RawConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +118,7 @@ func (c *Config) Contexts() (map[string]*clientcmdapi.Context, error) {
 
 // DelContext remove a given context from the configuration.
 func (c *Config) DelContext(n string) error {
-	cfg, err := c.rawConfig()
+	cfg, err := c.RawConfig()
 	if err != nil {
 		return err
 	}
@@ -155,12 +129,12 @@ func (c *Config) DelContext(n string) error {
 		return err
 	}
 
-	return clientcmd.ModifyConfig(acc, *cfg, true)
+	return clientcmd.ModifyConfig(acc, cfg, true)
 }
 
 // ContextNames fetch all available contexts.
 func (c *Config) ContextNames() ([]string, error) {
-	cfg, err := c.rawConfig()
+	cfg, err := c.RawConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +148,7 @@ func (c *Config) ContextNames() ([]string, error) {
 
 // ClusterNameFromContext returns the cluster associated with the given context.
 func (c *Config) ClusterNameFromContext(context string) (string, error) {
-	cfg, err := c.rawConfig()
+	cfg, err := c.RawConfig()
 	if err != nil {
 		return "", err
 	}
@@ -190,7 +164,7 @@ func (c *Config) CurrentClusterName() (string, error) {
 	if isSet(c.flags.ClusterName) {
 		return *c.flags.ClusterName, nil
 	}
-	cfg, err := c.rawConfig()
+	cfg, err := c.RawConfig()
 	if err != nil {
 		return "", err
 	}
@@ -207,15 +181,15 @@ func (c *Config) CurrentClusterName() (string, error) {
 }
 
 // ClusterNames fetch all kubeconfig defined clusters.
-func (c *Config) ClusterNames() ([]string, error) {
-	cfg, err := c.rawConfig()
+func (c *Config) ClusterNames() (map[string]struct{}, error) {
+	cfg, err := c.RawConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	cc := make([]string, 0, len(cfg.Clusters))
+	cc := make(map[string]struct{}, len(cfg.Clusters))
 	for name := range cfg.Clusters {
-		cc = append(cc, name)
+		cc[name] = struct{}{}
 	}
 
 	return cc, nil
@@ -258,7 +232,7 @@ func (c *Config) CurrentUserName() (string, error) {
 		return *c.flags.AuthInfoName, nil
 	}
 
-	cfg, err := c.rawConfig()
+	cfg, err := c.RawConfig()
 	if err != nil {
 		return "", err
 	}

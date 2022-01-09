@@ -195,21 +195,29 @@ func (t *Table) doUpdate(data render.TableData) {
 		t.actions.Delete(KeyShiftP)
 	}
 
-	var cols []string
-	if t.viewSetting != nil {
+	cols := t.header.Columns(t.wide)
+	if t.viewSetting != nil && len(t.viewSetting.Columns) > 0 {
 		cols = t.viewSetting.Columns
 	}
-	if len(cols) == 0 {
-		cols = t.header.Columns(t.wide)
-	}
 	custData := data.Customize(cols, t.wide)
-
-	if (t.sortCol.name == "" || custData.Header.IndexOf(t.sortCol.name, false) == -1) && len(custData.Header) > 0 && t.sortCol.name != "NONE" {
-		t.sortCol.name = custData.Header[0].Name
-		if t.sortCol.name == "NAMESPACE" && !client.IsAllNamespaces(data.Namespace) {
-			if idx := custData.Header.IndexOf("NAME", false); idx != -1 {
-				t.sortCol.name = custData.Header[idx].Name
+	if t.viewSetting != nil && t.viewSetting.SortColumn != "" {
+		tokens := strings.Split(t.viewSetting.SortColumn, ":")
+		if custData.Header.IndexOf(tokens[0], false) >= 0 {
+			t.sortCol.name, t.sortCol.asc = tokens[0], true
+			if len(tokens) == 2 && tokens[1] == "desc" {
+				t.sortCol.asc = false
 			}
+		}
+	}
+
+	if t.sortCol.name == "" && client.IsAllNamespaces(data.Namespace) {
+		t.sortCol.name = "NAMESPACE"
+	}
+	if t.sortCol.name == "" || (t.sortCol.name == "NAMESPACE" && !client.IsAllNamespaces(data.Namespace)) && len(custData.Header) > 0 {
+		if idx := custData.Header.IndexOf("NAME", false); idx >= 0 {
+			t.sortCol.name = custData.Header[idx].Name
+		} else {
+			t.sortCol.name = custData.Header[0].Name
 		}
 	}
 
@@ -235,7 +243,7 @@ func (t *Table) doUpdate(data render.TableData) {
 	custData.RowEvents.Sort(
 		custData.Namespace,
 		colIndex,
-		t.sortCol.name == "AGE",
+		custData.Header.IsTimeCol(colIndex),
 		data.Header.IsMetricsCol(colIndex),
 		t.sortCol.asc,
 	)
@@ -270,7 +278,7 @@ func (t *Table) buildRow(r int, re, ore render.RowEvent, h render.Header, pads M
 			continue
 		}
 
-		if !re.Deltas.IsBlank() && !h.IsAgeCol(c) {
+		if !re.Deltas.IsBlank() && !h.IsTimeCol(c) {
 			field += Deltas(re.Deltas[c], field)
 		}
 
