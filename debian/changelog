@@ -1,3 +1,10 @@
+k9s (0.25.18-2kaisen) kaisen-packages; urgency=medium
+
+  * Add k9s logo
+  * Add docs
+
+ -- Kevin Chevreuil - Kaisen <kaisen@kaisenlinux.org>  Tue, 29 Mar 2022 22:39:51 +0100
+
 k9s (0.25.18-1kaisen) kaisen-packages; urgency=medium
 
   * Import 0.25.18 version
