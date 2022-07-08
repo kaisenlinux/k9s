@@ -7,7 +7,8 @@ export GOLANG=$(CURDIR)/obj-x86_64-linux-gnu
 
 override_dh_auto_build:
 	go get
-	go build
+	make kubectl-stable-version
+	make build
 
 override_dh_auto_test:
 
