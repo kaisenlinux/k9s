@@ -1,3 +1,9 @@
+k9s (0.25.21-2kaisen) kaisen-packages; urgency=medium
+
+  * Add autocompletion for BASH and ZSH
+
+ -- Kevin Chevreuil - Kaisen <kaisen@kaisenlinux.org>  Thu, 14 Jul 2022 07:00:46 +0100
+
 k9s (0.25.21-1kaisen) kaisen-packages; urgency=medium
 
   * Import 0.25.21 version
