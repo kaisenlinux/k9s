@@ -1,0 +1,12 @@
+Author: Kevin Chevreuil - Kaisen <kaisen@kaisenlinux.org>
+
+--- k9s-0.26.3.orig/cmd/version.go
++++ k9s-0.26.3/cmd/version.go
+@@ -35,7 +35,6 @@ func printVersion(short bool) {
+ 		printLogo(outputColor)
+ 	}
+ 	printTuple(fmat, "Version", version, outputColor)
+-	printTuple(fmat, "Commit", commit, outputColor)
+ 	printTuple(fmat, "Date", date, outputColor)
+ }
+ 

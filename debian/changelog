@@ -1,3 +1,10 @@
+k9s (0.26.3-1kaisen) kaisen-packages; urgency=medium
+
+  * Import 0.26.3
+  * Add the remove-commit patch
+
+ -- Kevin Chevreuil - Kaisen <kaisen@kaisenlinux.org>  Sun, 14 Aug 2022 18:16:32 +0100
+
 k9s (0.25.21-2kaisen) kaisen-packages; urgency=medium
 
   * Add autocompletion for BASH and ZSH

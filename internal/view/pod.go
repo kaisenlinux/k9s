@@ -42,13 +42,12 @@ func NewPod(gvr client.GVR) ResourceViewer {
 	)
 	p.AddBindKeysFn(p.bindKeys)
 	p.GetTable().SetEnterFn(p.showContainers)
-	p.GetTable().SetColorerFn(render.Pod{}.ColorerFunc())
 	p.GetTable().SetDecorateFn(p.portForwardIndicator)
 
 	return &p
 }
 
-func (p *Pod) portForwardIndicator(data render.TableData) render.TableData {
+func (p *Pod) portForwardIndicator(data *render.TableData) {
 	ff := p.App().factory.Forwarders()
 
 	col := data.IndexOfHeader("PF")
@@ -57,8 +56,7 @@ func (p *Pod) portForwardIndicator(data render.TableData) render.TableData {
 			re.Row.Fields[col] = "[orange::b]Ⓕ"
 		}
 	}
-
-	return decorateCpuMemHeaderRows(p.App(), data)
+	decorateCpuMemHeaderRows(p.App(), data)
 }
 
 func (p *Pod) bindDangerousKeys(aa ui.KeyActions) {
@@ -155,13 +153,6 @@ func (p *Pod) showNode(evt *tcell.EventKey) *tcell.EventKey {
 	return nil
 }
 
-func nodeContext(path string) ContextFunc {
-	return func(ctx context.Context) context.Context {
-		ctx = context.WithValue(ctx, internal.KeyPath, path)
-		return ctx
-	}
-}
-
 func (p *Pod) showPFCmd(evt *tcell.EventKey) *tcell.EventKey {
 	path := p.GetTable().GetSelectedItem()
 	if path == "" {
@@ -209,7 +200,7 @@ func (p *Pod) killCmd(evt *tcell.EventKey) *tcell.EventKey {
 	}
 	p.GetTable().ShowDeleted()
 	for _, path := range selections {
-		if err := nuker.Delete(path, nil, true); err != nil {
+		if err := nuker.Delete(context.Background(), path, nil, true); err != nil {
 			p.App().Flash().Errf("Delete failed with %s", err)
 		} else {
 			p.App().factory.DeleteForwarder(path)
