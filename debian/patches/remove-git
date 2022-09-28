@@ -1,19 +1,15 @@
 Author: Kevin Chevreuil - Kaisen <kaisen@kaisenlinux.org>
 
---- k9s-0.26.3.orig/Makefile
-+++ k9s-0.26.3/Makefile
-@@ -2,10 +2,9 @@ GO_FLAGS   ?=
+--- k9s-0.26.5.orig/Makefile
++++ k9s-0.26.5/Makefile
+@@ -2,7 +2,6 @@ GO_FLAGS   ?=
  NAME       := k9s
  OUTPUT_BIN ?= execs/${NAME}
  PACKAGE    := github.com/derailed/$(NAME)
 -GIT_REV    ?= $(shell git rev-parse --short HEAD)
  SOURCE_DATE_EPOCH ?= $(shell date +%s)
  DATE       ?= $(shell date -u -d @${SOURCE_DATE_EPOCH} +"%Y-%m-%dT%H:%M:%SZ")
--VERSION    ?= v0.26.1
-+VERSION    ?= v0.26.3
- IMG_NAME   := derailed/k9s
- IMAGE      := ${IMG_NAME}:${VERSION}
- 
+ VERSION    ?= v0.26.5
 @@ -20,7 +19,7 @@ cover:  ## Run test coverage suite
  
  build:  ## Builds the CLI
