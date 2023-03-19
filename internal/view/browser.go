@@ -18,7 +18,7 @@ import (
 	"github.com/derailed/k9s/internal/render"
 	"github.com/derailed/k9s/internal/ui"
 	"github.com/derailed/k9s/internal/ui/dialog"
-	"github.com/gdamore/tcell/v2"
+	"github.com/derailed/tcell/v2"
 	"github.com/rs/zerolog/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -121,6 +121,7 @@ func (b *Browser) bindKeys(aa ui.KeyActions) {
 		tcell.KeyEscape: ui.NewSharedKeyAction("Filter Reset", b.resetCmd, false),
 		tcell.KeyEnter:  ui.NewSharedKeyAction("Filter", b.filterCmd, false),
 		tcell.KeyHelp:   ui.NewSharedKeyAction("Help", b.helpCmd, false),
+		ui.KeyV:         ui.NewSharedKeyAction("Zob", b.blahCmd, true),
 	})
 }
 
@@ -261,7 +262,7 @@ func (b *Browser) viewCmd(evt *tcell.EventKey) *tcell.EventKey {
 	}
 
 	v := NewLiveView(b.app, "YAML", model.NewYAML(b.GVR(), path))
-	if err := v.app.inject(v); err != nil {
+	if err := v.app.inject(v, false); err != nil {
 		v.app.Flash().Err(err)
 	}
 	return nil
@@ -345,6 +346,28 @@ func (b *Browser) deleteCmd(evt *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 		b.resourceDelete(selections, msg)
+	}
+
+	return nil
+}
+
+func (b *Browser) blahCmd(evt *tcell.EventKey) *tcell.EventKey {
+	b.Stop()
+	defer b.Start()
+	{
+		v := NewDetails(b.app, "Results", "Blee", true)
+		if err := v.app.inject(v, false); err != nil {
+			v.app.Flash().Err(err)
+		}
+
+		for i := 0; i < 10; i++ {
+			j := i
+			b.app.QueueUpdateDraw(func() {
+				log.Debug().Msgf("YO %d", j)
+				fmt.Fprintf(v.GetWriter(), "Yo %d\n", j)
+				time.Sleep(1 * time.Second)
+			})
+		}
 	}
 
 	return nil
@@ -464,7 +487,7 @@ func (b *Browser) defaultContext() context.Context {
 }
 
 func (b *Browser) refreshActions() {
-	if b.App().Content.Top().Name() != b.Name() {
+	if b.App().Content.Top() != nil && b.App().Content.Top().Name() != b.Name() {
 		return
 	}
 	aa := ui.KeyActions{
@@ -525,14 +548,13 @@ func (b *Browser) simpleDelete(selections []string, msg string) {
 		} else {
 			b.app.Flash().Infof("Delete resource %s %s", b.GVR(), selections[0])
 		}
-		log.Debug().Msgf("SELS %v", selections)
 		for _, sel := range selections {
 			nuker, ok := b.accessor.(dao.Nuker)
 			if !ok {
 				b.app.Flash().Errf("Invalid nuker %T", b.accessor)
 				continue
 			}
-			if err := nuker.Delete(context.Background(), sel, nil, false); err != nil {
+			if err := nuker.Delete(context.Background(), sel, nil, dao.DefaultGrace); err != nil {
 				b.app.Flash().Errf("Delete failed with `%s", err)
 			} else {
 				b.app.factory.DeleteForwarder(sel)
@@ -552,7 +574,11 @@ func (b *Browser) resourceDelete(selections []string, msg string) {
 			b.app.Flash().Infof("Delete resource %s %s", b.GVR(), selections[0])
 		}
 		for _, sel := range selections {
-			if err := b.GetModel().Delete(b.defaultContext(), sel, propagation, force); err != nil {
+			grace := dao.DefaultGrace
+			if force {
+				grace = dao.ForceGrace
+			}
+			if err := b.GetModel().Delete(b.defaultContext(), sel, propagation, grace); err != nil {
 				b.app.Flash().Errf("Delete failed with `%s", err)
 			} else {
 				b.app.factory.DeleteForwarder(sel)

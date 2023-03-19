@@ -3,13 +3,14 @@ package view
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/derailed/k9s/internal/config"
 	"github.com/derailed/k9s/internal/model"
 	"github.com/derailed/k9s/internal/ui"
+	"github.com/derailed/tcell/v2"
 	"github.com/derailed/tview"
-	"github.com/gdamore/tcell/v2"
 	"github.com/sahilm/fuzzy"
 )
 
@@ -157,6 +158,10 @@ func (d *Details) StylesChanged(s *config.Styles) {
 func (d *Details) Update(buff string) *Details {
 	d.model.SetText(buff)
 	return d
+}
+
+func (d *Details) GetWriter() io.Writer {
+	return d.text
 }
 
 // SetSubject updates the subject.

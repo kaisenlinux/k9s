@@ -41,6 +41,10 @@ type shellOpts struct {
 
 func runK(a *App, opts shellOpts) bool {
 	bin, err := exec.LookPath("kubectl")
+	if errors.Is(err, exec.ErrDot) {
+		log.Error().Err(err).Msgf("kubectl command must not be in the current working directory")
+		return false
+	}
 	if err != nil {
 		log.Error().Err(err).Msgf("kubectl command is not in your path")
 		return false
@@ -137,6 +141,10 @@ func execute(opts shellOpts) error {
 
 func runKu(a *App, opts shellOpts) (string, error) {
 	bin, err := exec.LookPath("kubectl")
+	if errors.Is(err, exec.ErrDot) {
+		log.Error().Err(err).Msgf("kubectl command must not be in the current working directory")
+		return "", err
+	}
 	if err != nil {
 		log.Error().Err(err).Msgf("kubectl command is not in your path")
 		return "", err
@@ -331,6 +339,7 @@ func k9sShellPod(node string, cfg *config.ShellPod) v1.Pod {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      k9sShellPodName(),
 			Namespace: cfg.Namespace,
+			Labels:    cfg.Labels,
 		},
 		Spec: v1.PodSpec{
 			NodeName:                      node,
