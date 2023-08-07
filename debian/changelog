@@ -1,3 +1,10 @@
+k9s (0.27.4-2kaisen) kaisen-packages; urgency=medium
+
+  * Update the golang-go version required to build
+  * Remove golang-go as package dependancy
+
+ -- Kevin Chevreuil - Kaisen <kaisen@kaisenlinux.org>  Mon, 07 Aug 2023 13:50:02 +0100
+
 k9s (0.27.4-1kaisen) kaisen-packages; urgency=medium
 
   * Import 0.27.4

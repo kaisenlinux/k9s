@@ -15,6 +15,5 @@ Package: k9s
 Architecture: amd64 arm64
 Depends: ${shlibs:Depends},
 	 ${misc:Depends},
-	 golang-go (>= 1.20),
 Suggests: kubernetes-client
 Description: Kubernetes CLI To Manage Your Clusters In Style!
