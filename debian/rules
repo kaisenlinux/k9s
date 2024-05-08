@@ -3,7 +3,7 @@
 export GOPATH=$(CURDIR)/_build
 
 %:
-	dh $@ --buildsystem=golang
+	dh $@ --buildsystem=golang --builddirectory=_build
 
 override_dh_auto_clean:
 	rm -rf $(CURDIR)/_build/
@@ -12,14 +12,11 @@ override_dh_auto_build:
 	go get
 	make kubectl-stable-version
 	make build
-	mkdir -p $(CURDIR)/execs/bash $(CURDIR)/execs/zsh
-	$(CURDIR)/execs/k9s completion bash > $(CURDIR)/execs/bash/k9s
-	$(CURDIR)/execs/k9s completion zsh > $(CURDIR)/execs/zsh/_k9s
 
 override_dh_auto_test:
 
 override_dh_auto_install:
-	dh_auto_install -- --no-source
-	mkdir -p $(CURDIR)/debian/k9s/usr/share/bash-completion/completions/ $(CURDIR)/debian/k9s/usr/share/zsh/vendor-completions/
-	cp $(CURDIR)/execs/bash/k9s $(CURDIR)/debian/k9s/usr/share/bash-completion/completions/
-	cp $(CURDIR)/execs/zsh/_k9s $(CURDIR)/debian/k9s/usr/share/zsh/vendor-completions/
+	install -p -m 0755 $(CURDIR)/execs/k9s $(CURDIR)/debian/k9s/usr/bin/
+	install -p -m 0644 $(CURDIR)/debian/k9s.png $(CURDIR)/debian/k9s/usr/share/pixmaps/
+	$(CURDIR)/debian/k9s/usr/bin/k9s completion bash > $(CURDIR)/debian/k9s/usr/share/bash-completion/completions/k9s
+	$(CURDIR)/debian/k9s/usr/bin/k9s completion zsh > $(CURDIR)/debian/k9s/usr/share/zsh/vendor-completions/_k9s
