@@ -246,6 +246,7 @@ func (a *App) bindKeys() {
 		ui.KeyHelp:     ui.NewSharedKeyAction("Help", a.helpCmd, false),
 		tcell.KeyCtrlA: ui.NewSharedKeyAction("Aliases", a.aliasCmd, false),
 		tcell.KeyEnter: ui.NewKeyAction("Goto", a.gotoCmd, false),
+		tcell.KeyCtrlC: ui.NewKeyAction("Quit", a.quitCmd, false),
 	}))
 }
 
@@ -466,7 +467,7 @@ func (a *App) switchContext(ci *cmd.Interpreter, force bool) error {
 				return err
 			}
 		}
-		a.Flash().Errf("Using %q namespace", ns)
+		a.Flash().Infof("Using %q namespace", ns)
 
 		if err := a.Config.Save(true); err != nil {
 			log.Error().Err(err).Msg("config save failed!")
@@ -656,6 +657,19 @@ func (a *App) dirCmd(path string) error {
 	a.cmdHistory.Push("dir " + path)
 
 	return a.inject(NewDir(path), true)
+}
+
+func (a *App) quitCmd(evt *tcell.EventKey) *tcell.EventKey {
+	if a.InCmdMode() {
+		return evt
+	}
+
+	if !a.Config.K9s.NoExitOnCtrlC {
+		a.BailOut()
+	}
+
+	// overwrite the default ctrl-c behavior of tview
+	return nil
 }
 
 func (a *App) helpCmd(evt *tcell.EventKey) *tcell.EventKey {

@@ -53,8 +53,11 @@ func NewContextFromKubeConfig(ks KubeSettings) (*Context, error) {
 }
 
 func (c *Context) merge(old *Context) {
-	if old == nil {
+	if old == nil || old.Namespace == nil {
 		return
+	}
+	if c.Namespace == nil {
+		c.Namespace = NewNamespace()
 	}
 	c.Namespace.merge(old.Namespace)
 }
@@ -79,6 +82,9 @@ func (c *Context) Validate(conn client.Connection, ks KubeSettings) {
 	}
 	if cl, err := ks.CurrentClusterName(); err == nil {
 		c.ClusterName = cl
+	}
+	if b := os.Getenv(envFGNodeShell); b != "" {
+		c.FeatureGates.NodeShell = defaultFGNodeShell()
 	}
 
 	if c.Namespace == nil {
