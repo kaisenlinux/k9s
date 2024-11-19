@@ -16,6 +16,7 @@ import (
 	"github.com/derailed/k9s/internal/client"
 	"github.com/derailed/k9s/internal/render"
 	"github.com/derailed/k9s/internal/watch"
+	"github.com/derailed/tview"
 	"github.com/rs/zerolog/log"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -381,14 +382,14 @@ func readLogs(ctx context.Context, wg *sync.WaitGroup, stream io.ReadCloser, out
 	for {
 		var item *LogItem
 		if bytes, err := r.ReadBytes('\n'); err == nil {
-			item = opts.ToLogItem(bytes)
+			item = opts.ToLogItem(tview.EscapeBytes(bytes))
 		} else {
 			if errors.Is(err, io.EOF) {
-				e := fmt.Errorf("Stream closed %w for %s", err, opts.Info())
+				e := fmt.Errorf("stream closed %w for %s", err, opts.Info())
 				item = opts.ToErrLogItem(e)
 				log.Warn().Err(e).Msg("log-reader EOF")
 			} else {
-				e := fmt.Errorf("Stream canceled %w for %s", err, opts.Info())
+				e := fmt.Errorf("stream canceled %w for %s", err, opts.Info())
 				item = opts.ToErrLogItem(e)
 				log.Warn().Err(e).Msg("log-reader canceled")
 			}
@@ -438,7 +439,7 @@ func (p *Pod) SetImages(ctx context.Context, path string, imageSpecs ImageSpecs)
 		return err
 	}
 	if isManaged {
-		return fmt.Errorf("Unable to set image. This pod is managed by %s. Please set the image on the controller", manager)
+		return fmt.Errorf("unable to set image. This pod is managed by %s. Please set the image on the controller", manager)
 	}
 	jsonPatch, err := GetJsonPatch(imageSpecs)
 	if err != nil {

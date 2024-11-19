@@ -23,7 +23,7 @@ Your donations will go a long way in keeping our servers lights on and beers in 
 [![Go Report Card](https://goreportcard.com/badge/github.com/derailed/k9s?)](https://goreportcard.com/report/github.com/derailed/k9s)
 [![golangci badge](https://github.com/golangci/golangci-web/blob/master/src/assets/images/badge_a_plus_flat.svg)](https://golangci.com/r/github.com/derailed/k9s)
 [![codebeat badge](https://codebeat.co/badges/89e5a80e-dfe8-4426-acf6-6be781e0a12e)](https://codebeat.co/projects/github-com-derailed-k9s-master)
-[![Build Status](https://travis-ci.com/derailed/k9s.svg?branch=master)](https://travis-ci.com/derailed/k9s)
+[![Build Status](https://api.travis-ci.com/derailed/k9s.svg?branch=master)](https://travis-ci.com/derailed/k9s)
 [![Docker Repository on Quay](https://quay.io/repository/derailed/k9s/status "Docker Repository on Quay")](https://quay.io/repository/derailed/k9s)
 [![release](https://img.shields.io/github/release-pre/derailed/k9s.svg)](https://github.com/derailed/k9s/releases)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/mum4k/termdash/blob/master/LICENSE)
@@ -112,6 +112,12 @@ Binaries for Linux, Windows and Mac are available as tarballs in the [release pa
   pkg install k9s
   ```
 
+* On Ubuntu
+
+  ```shell
+  wget https://github.com/derailed/k9s/releases/download/v0.32.7/k9s_linux_amd64.deb && apt install ./k9s_linux_amd64.deb && rm k9s_linux_amd64.deb
+  ```
+
 * Via [Winget](https://github.com/microsoft/winget-cli) for Windows
 
   ```shell
@@ -165,7 +171,7 @@ Binaries for Linux, Windows and Mac are available as tarballs in the [release pa
 
 ## Building From Source
 
- K9s is currently using GO v1.21.X or above.
+ K9s is currently using GO v1.23.X or above.
  In order to build K9s from source you must:
 
  1. Clone the repo
@@ -340,7 +346,8 @@ K9s uses aliases to navigate most K8s resources.
 |---------------------------------------------------------------------------------|-------------------------------|------------------------------------------------------------------------|
 | Show active keyboard mnemonics and help                                         | `?`                           |                                                                        |
 | Show all available resource alias                                               | `ctrl-a`                      |                                                                        |
-| To bail out of K9s                                                              | `:quit`, `:q`, `ctrl-c`                |                                                                        |
+| To bail out of K9s                                                              | `:quit`, `:q`, `ctrl-c`       |                                                                        |
+| To go up/back to the previous view                                              | `esc`                         | If you have crumbs on, this will go to the previous one                |
 | View a Kubernetes resource using singular/plural or short-name                  | `:`pod⏎                       | accepts singular, plural, short-name or alias ie pod or pods           |
 | View a Kubernetes resource in a given namespace                                 | `:`pod ns-x⏎                  |                                                                        |
 | View filtered pods (New v0.30.0!)                                               | `:`pod /fred⏎                 | View all pods filtered by fred                                         |
@@ -646,7 +653,7 @@ K9s allows you to extend your command line and tooling by defining your very own
 
 A plugin is defined as follows:
 
-* Shortcut option represents the key combination a user would type to activate the plugin
+* Shortcut option represents the key combination a user would type to activate the plugin. Valid values are [a-z], Shift-[A-Z], Ctrl-[A-Z].
 * Override option make that the default action related to the shortcut will be overrided by the plugin
 * Confirm option (when enabled) lets you see the command that is going to be executed and gives you an option to confirm or prevent execution
 * Description will be printed next to the shortcut in the k9s menu
@@ -654,7 +661,8 @@ A plugin is defined as follows:
 * Command represents ad-hoc commands the plugin runs upon activation
 * Background specifies whether or not the command runs in the background
 * Args specifies the various arguments that should apply to the command above
-* OverwriteOutput options allows plugin developers to provide custom messages on plugin execution
+* OverwriteOutput boolean option allows plugin developers to provide custom messages on plugin stdout execution. See example in [#2644](https://github.com/derailed/k9s/pull/2644)
+* Dangerous boolean option enables disabling the plugin when read-only mode is set. See [#2604](https://github.com/derailed/k9s/issues/2604)
 
 K9s does provide additional environment variables for you to customize your plugins arguments. Currently, the available environment variables are as follows:
 
@@ -686,7 +694,9 @@ plugins:
   fred:
     shortCut: Ctrl-L
     override: false
+    overwriteOutput: false
     confirm: false
+    dangerous: false
     description: Pod logs
     scopes:
     - pods

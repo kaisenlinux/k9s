@@ -1,3 +1,10 @@
+k9s (0.32.7-1kaisen) kaisen-packages; urgency=medium
+
+  * Import the new upstream release
+  * Bump the golang-go version required to build
+
+ -- Kevin Chevreuil - Kaisen <kaisen@kaisenlinux.org>  Tue, 19 Nov 2024 17:06:33 +0200
+
 k9s (0.32.5-1kaisen) kaisen-packages; urgency=medium
 
   * Import the new upstream release

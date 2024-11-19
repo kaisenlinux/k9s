@@ -68,6 +68,13 @@ func (n *Namespace) Validate(c client.Connection) {
 			n.rmFavNS(ns)
 		}
 	}
+
+	if len(n.Favorites) > MaxFavoritesNS {
+		log.Debug().Msgf("[Namespace] Number of favorite exceeds hard limit of %v. Trimming.", MaxFavoritesNS)
+		for _, ns := range n.Favorites[MaxFavoritesNS:] {
+			n.rmFavNS(ns)
+		}
+	}
 }
 
 // SetActive set the active namespace.

@@ -12,6 +12,7 @@ import (
 	"github.com/derailed/tview"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -92,6 +93,7 @@ func (p Pod) Header(ns string) model1.Header {
 		model1.HeaderColumn{Name: "READY"},
 		model1.HeaderColumn{Name: "STATUS"},
 		model1.HeaderColumn{Name: "RESTARTS", Align: tview.AlignRight},
+		model1.HeaderColumn{Name: "LAST RESTART", Align: tview.AlignRight, Time: true, Wide: true},
 		model1.HeaderColumn{Name: "CPU", Align: tview.AlignRight, MX: true},
 		model1.HeaderColumn{Name: "MEM", Align: tview.AlignRight, MX: true},
 		model1.HeaderColumn{Name: "CPU/R:L", Align: tview.AlignRight, Wide: true},
@@ -102,6 +104,7 @@ func (p Pod) Header(ns string) model1.Header {
 		model1.HeaderColumn{Name: "%MEM/L", Align: tview.AlignRight, MX: true},
 		model1.HeaderColumn{Name: "IP"},
 		model1.HeaderColumn{Name: "NODE"},
+		model1.HeaderColumn{Name: "SERVICEACCOUNT", Wide: true},
 		model1.HeaderColumn{Name: "NOMINATED NODE", Wide: true},
 		model1.HeaderColumn{Name: "READINESS GATES", Wide: true},
 		model1.HeaderColumn{Name: "QOS", Wide: true},
@@ -127,12 +130,13 @@ func (p Pod) Render(o interface{}, ns string, row *model1.Row) error {
 	_, _, irc := p.Statuses(ics)
 	cs := po.Status.ContainerStatuses
 	cr, _, rc := p.Statuses(cs)
+	lr := p.lastRestart(cs)
 
 	var ccmx []mv1beta1.ContainerMetrics
 	if pwm.MX != nil {
 		ccmx = pwm.MX.Containers
 	}
-	c, r := gatherCoMX(po.Spec.Containers, ccmx)
+	c, r := gatherCoMX(&po.Spec, ccmx)
 	phase := p.Phase(&po)
 	row.ID = client.MetaFQN(po.ObjectMeta)
 
@@ -144,6 +148,7 @@ func (p Pod) Render(o interface{}, ns string, row *model1.Row) error {
 		strconv.Itoa(cr) + "/" + strconv.Itoa(len(po.Spec.Containers)),
 		phase,
 		strconv.Itoa(rc + irc),
+		ToAge(lr),
 		toMc(c.cpu),
 		toMi(c.mem),
 		toMc(r.cpu) + ":" + toMc(r.lcpu),
@@ -154,6 +159,7 @@ func (p Pod) Render(o interface{}, ns string, row *model1.Row) error {
 		client.ToPercentageStr(c.mem, r.lmem),
 		na(po.Status.PodIP),
 		na(po.Spec.NodeName),
+		na(po.Spec.ServiceAccountName),
 		asNominated(po.Status.NominatedNodeName),
 		asReadinessGate(po),
 		p.mapQOS(po.Status.QOSClass),
@@ -171,6 +177,9 @@ func (p Pod) diagnose(phase string, cr, ct int) error {
 	}
 	if cr != ct || ct == 0 {
 		return fmt.Errorf("container ready check failed: %d of %d", cr, ct)
+	}
+	if phase == Terminating {
+		return fmt.Errorf("pod is terminating")
 	}
 
 	return nil
@@ -191,7 +200,7 @@ func asReadinessGate(pod v1.Pod) string {
 		return MissingValue
 	}
 
-	trueConditions := 0
+	var trueConditions int
 	for _, readinessGate := range pod.Spec.ReadinessGates {
 		conditionType := readinessGate.ConditionType
 		for _, condition := range pod.Status.Conditions {
@@ -223,7 +232,11 @@ func (p *PodWithMetrics) DeepCopyObject() runtime.Object {
 	return p
 }
 
-func gatherCoMX(cc []v1.Container, ccmx []mv1beta1.ContainerMetrics) (c, r metric) {
+func gatherCoMX(spec *v1.PodSpec, ccmx []mv1beta1.ContainerMetrics) (c, r metric) {
+	cc := make([]v1.Container, 0, len(spec.InitContainers)+len(spec.Containers))
+	cc = append(cc, filterSidecarCO(spec.InitContainers)...)
+	cc = append(cc, spec.Containers...)
+
 	rcpu, rmem := cosRequests(cc)
 	r.cpu, r.mem = rcpu.MilliValue(), rmem.Value()
 
@@ -307,6 +320,20 @@ func (*Pod) Statuses(ss []v1.ContainerStatus) (cr, ct, rc int) {
 		rc += int(c.RestartCount)
 	}
 
+	return
+}
+
+// lastRestart returns the last container restart time.
+func (*Pod) lastRestart(ss []v1.ContainerStatus) (latest metav1.Time) {
+	for _, c := range ss {
+		if c.LastTerminationState.Terminated == nil {
+			continue
+		}
+		ts := c.LastTerminationState.Terminated.FinishedAt
+		if latest.IsZero() || ts.After(latest.Time) {
+			latest = ts
+		}
+	}
 	return
 }
 
@@ -401,7 +428,7 @@ func checkInitContainerStatus(cs v1.ContainerStatus, count, initCount int, resta
 	return "Init:" + strconv.Itoa(count) + "/" + strconv.Itoa(initCount)
 }
 
-// PosStatus computes pod status.
+// PodStatus computes pod status.
 func PodStatus(pod *v1.Pod) string {
 	reason := string(pod.Status.Phase)
 	if pod.Status.Reason != "" {
@@ -489,4 +516,15 @@ func hasPodReadyCondition(conditions []v1.PodCondition) bool {
 
 func restartableInitCO(p *v1.ContainerRestartPolicy) bool {
 	return p != nil && *p == v1.ContainerRestartPolicyAlways
+}
+
+func filterSidecarCO(cc []v1.Container) []v1.Container {
+	rcc := make([]v1.Container, 0, len(cc))
+	for _, c := range cc {
+		if c.RestartPolicy != nil && *c.RestartPolicy == v1.ContainerRestartPolicyAlways {
+			rcc = append(rcc, c)
+		}
+	}
+
+	return rcc
 }
